@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ระบบติดตามรถไฟฟ้า มศก. ทับแก้ว (Tabkaew EV Bus Tracker)</title>
+  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Prompt', sans-serif; }
+    body { display: flex; height: 100vh; background-color: #f8fafc; color: #1e293b; overflow: hidden; position: relative; }
+    #sidebar { width: 360px; height: 100%; background: #ffffff; box-shadow: 2px 0 16px rgba(0,0,0,0.08); z-index: 1000; display: flex; flex-direction: column; padding: 20px; overflow-y: auto; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; flex-shrink: 0; }
+    #sidebar.collapsed { margin-left: -360px; }
+    .toggle-sidebar-btn { position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 1001; font-size: 14px; color: #475569; transition: all 0.2s; }
+    .toggle-sidebar-btn:hover { background: #e2e8f0; color: #2563eb; }
+    #floatingOpenBtn { position: absolute; top: 16px; left: 16px; z-index: 999; background: #ffffff; border: 1px solid #cbd5e1; padding: 8px 14px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); cursor: pointer; display: none; font-size: 0.85rem; font-weight: 500; color: #1e293b; }
+    .header { margin-bottom: 16px; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; padding-right: 30px; }
+    .header h2 { font-size: 1.2rem; color: #0f172a; }
+    .header p { font-size: 0.8rem; color: #64748b; margin-top: 2px; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin: 10px 0; }
+    .section-title { font-size: 0.9rem; font-weight: 600; color: #334155; }
+    .btn-history { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 6px; padding: 4px 8px; font-size: 0.75rem; font-weight: 500; cursor: pointer; }
+    .bus-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; transition: all 0.2s; }
+    .bus-card.active { border-color: #2563eb; background: #eff6ff; }
+    .bus-card-top { display: flex; justify-content: space-between; align-items: center; }
+    .bus-info .bus-number { font-weight: 600; font-size: 1rem; color: #1e40af; }
+    .bus-info .bus-status { font-size: 0.78rem; color: #16a34a; margin-top: 2px; }
+    .bus-info .bus-status.stopped { color: #64748b; }
+    .bus-distance { text-align: right; }
+    .bus-distance .km-val { font-size: 1.15rem; font-weight: 700; color: #0f172a; }
+    .bus-distance .km-unit { font-size: 0.7rem; color: #64748b; }
+    .bus-eta-box { display: flex; justify-content: space-between; align-items: center; background: #ffffff; border-radius: 8px; padding: 6px 10px; border: 1px solid #dbeafe; font-size: 0.75rem; margin-top: 4px; }
+    .eta-badge { background: #22c55e; color: white; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+    .eta-badge.waiting { background: #94a3b8; }
+    #map { flex: 1; height: 100%; width: 100%; }
+    .custom-bus-icon { background-color: #2563eb; color: white; border-radius: 50%; border: 2px solid #ffffff; text-align: center; line-height: 32px; font-weight: 700; font-size: 14px; box-shadow: 0 4px 10px rgba(37,99,235,0.4); }
+    .custom-bus-icon.inactive { background-color: #94a3b8; box-shadow: none; }
+    .custom-stop-icon { background-color: #0284c7; color: white; border-radius: 50%; border: 2px solid #ffffff; text-align: center; line-height: 20px; font-weight: 600; font-size: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+    #weatherWidgetContainer { position: absolute; bottom: 24px; right: 24px; z-index: 1000; display: flex; align-items: center; gap: 12px; }
+    #weatherBtn { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 30px; padding: 8px 16px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 16px rgba(15, 23, 42, 0.15); cursor: pointer; }
+    #weatherBtn .icon { font-size: 1.4rem; line-height: 1; }
+    #weatherBtn .temp { font-weight: 600; font-size: 0.95rem; color: #0f172a; }
+    #rainAlertToast { background: #0284c7; color: #ffffff; padding: 10px 16px; border-radius: 20px; font-size: 0.8rem; font-weight: 500; display: flex; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transform: translateX(40px); transition: all 0.4s ease; max-width: 0; overflow: hidden; white-space: nowrap; }
+    #rainAlertToast.show { opacity: 1; pointer-events: auto; transform: translateX(0); max-width: 320px; }
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); z-index: 2000; justify-content: center; align-items: center; padding: 16px; }
+    .modal-card { background: white; width: 100%; max-width: 400px; border-radius: 16px; padding: 20px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .close-btn { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: #94a3b8; }
+    .history-list { max-height: 240px; overflow-y: auto; }
+    .history-item { display: flex; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 0.85rem; }
+    .weather-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+    .weather-detail-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; text-align: center; }
+    .weather-detail-box .label { font-size: 0.75rem; color: #64748b; }
+    .weather-detail-box .val { font-size: 1rem; font-weight: 600; color: #0f172a; margin-top: 2px; }
+    @media (max-width: 640px) {
+      body { flex-direction: column; }
+      #sidebar { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1001; }
+      #sidebar.collapsed { margin-left: -100%; }
+      #floatingOpenBtn { display: block; }
+      #weatherWidgetContainer { bottom: 16px; right: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <button id="floatingOpenBtn" onclick="toggleSidebar()">🚌 แสดงรายการรถ</button>
+
+  <div id="sidebar">
+    <a href="dashboard.html" target="_blank" style="
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background-color: #0b5345;
+    color: white;
+    text-decoration: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-bottom: 12px;
+  ">
+    📊 เปิดดูข้อมูลอย่างละเอียด
+  </a>
+    <div class="toggle-sidebar-btn" onclick="toggleSidebar()" title="ซ่อนเมนู">❮</div>
+    <div class="header">
+      <h2>🚌 ทับแก้ว EV Bus Tracker</h2>
+      <p>ติดตามพิกัดรถและคำนวณเวลาถึงป้าย Real-time</p>
+    </div>
+    <div class="section-header">
+      <div class="section-title">สถานะรถและเวลาถึงป้าย</div>
+      <button class="btn-history" onclick="openHistoryModal('ALL')">📅 ประวัติรายวัน</button>
+    </div>
+    <div id="bus-list">
+      <div style="color: #64748b; font-size: 0.85rem;">กำลังโหลดข้อมูลจาก Firestore...</div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <div id="weatherWidgetContainer">
+    <div id="rainAlertToast"><span>🌧️</span><span id="rainAlertText">เตรียมร่ม! กำลังมีฝนในพื้นที่</span></div>
+    <div id="weatherBtn" onclick="openWeatherModal()"><span id="weatherIcon" class="icon">⛅</span><span id="weatherTemp" class="temp">--°C</span></div>
+  </div>
+
+  <div id="historyModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modalTitle" style="font-size:1rem; color:#0f172a;">📅 ประวัติระยะทางรายวัน (Cloud Firestore)</h3>
+        <button class="close-btn" onclick="closeHistoryModal()">&times;</button>
+      </div>
+      <div id="modalBody" class="history-list"></div>
+    </div>
+  </div>
+
+  <div id="weatherModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 style="font-size:1rem; color:#0f172a;">🌤️ สภาพอากาศ มศก. ทับแก้ว</h3>
+        <button class="close-btn" onclick="closeWeatherModal()">&times;</button>
+      </div>
+      <div style="text-align: center; margin: 15px 0;">
+        <div id="modalWeatherIcon" style="font-size: 3.5rem;">⛅</div>
+        <div id="modalWeatherDesc" style="font-size: 1.1rem; font-weight:600; color:#1e40af; margin-top:4px;">-</div>
+        <div id="modalWeatherTemp" style="font-size: 2rem; font-weight:700; color:#0f172a;">--°C</div>
+      </div>
+      <div class="weather-detail-grid">
+        <div class="weather-detail-box"><div class="label">🌧️ โอกาสเกิดฝน</div><div id="weatherPrecipProb" class="val">-- %</div></div>
+        <div class="weather-detail-box"><div class="label">💧 ความชื้น</div><div id="weatherHumidity" class="val">-- %</div></div>
+        <div class="weather-detail-box"><div class="label">💨 ความเร็วลม</div><div id="weatherWind" class="val">-- กม./ชม.</div></div>
+        <div class="weather-detail-box"><div class="label">☂️ ปริมาณฝน</div><div id="weatherRainMm" class="val">-- มม.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Firebase SDK v10 (compat mode) -->
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-database-compat.js"></script>
+
+  <script>
+    // ==========================================
+    // 1. Firebase Config จากโปรเจกต์ของคุณ
+    // ==========================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyCWzHhoHD6F-WzM-CB_NZI40qcsaieo5Q0",
+      authDomain: "tabkaew-bus-tracker.firebaseapp.com",
+      projectId: "tabkaew-bus-tracker",
+      storageBucket: "tabkaew-bus-tracker.firebasestorage.app",
+      messagingSenderId: "837452814060",
+      appId: "1:837452814060:web:1b69e72f7cb263cebef7c9",
+      measurementId: "G-3WKFL7KSWD"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    // ==========================================
+    // เชื่อมต่อดึง GPS สดจาก ESP32 (Realtime Database)
+    // ==========================================
+    const customGpsApp = firebase.initializeApp({
+      databaseURL: "https://gps-001-1b983-default-rtdb.asia-southeast1.firebasedatabase.app"
+    }, "customGpsApp");
+
+    const rtdb = customGpsApp.database();
+    const CUSTOM_BUS_ID = '99'; // กำหนดชื่อ/เบอร์รถสำหรับกล่องนี้
+
+    rtdb.ref('/GPS_Data').on('value', (snapshot) => {
+      const data = snapshot.val();
+      if (!data || data.latitude === undefined || data.longitude === undefined) return;
+
+      const realLat = parseFloat(data.latitude);
+      const realLng = parseFloat(data.longitude);
+      const realDistOnRoute = findClosestDistanceOnRoute(realLat, realLng);
+
+      if (!busStore[CUSTOM_BUS_ID]) {
+        busStore[CUSTOM_BUS_ID] = {
+          busNo: CUSTOM_BUS_ID,
+          lat: realLat, lng: realLng,
+          realLat: realLat, realLng: realLng,
+          lastRealLat: realLat, lastRealLng: realLng,
+          status: 'รถเสริมพิเศษ (ESP32 GPS)',
+          isAvailable: true,
+          todayDistanceKm: 0.0,
+          simDist: realDistOnRoute,
+          pauseUntil: 0,
+          lastStationStop: null
+        };
+      } else {
+        const b = busStore[CUSTOM_BUS_ID];
+        b.status = 'วิ่งให้บริการ (ESP32 GPS)';
+        b.isAvailable = true;
+
+        // คำนวณระยะทางเมื่อขยับจริงเกิน 15 เมตร
+        const realMoveDelta = calculateDistance(b.lastRealLat, b.lastRealLng, realLat, realLng);
+        if (realMoveDelta > 0.015) {
+          b.todayDistanceKm += realMoveDelta;
+          b.lastRealLat = realLat;
+          b.lastRealLng = realLng;
+          saveDistanceToFirestore(CUSTOM_BUS_ID, parseFloat(b.todayDistanceKm.toFixed(2)));
+        }
+
+        b.realLat = realLat;
+        b.realLng = realLng;
+
+        if (calculateDistance(b.lat, b.lng, realLat, realLng) > 0.05) {
+          b.simDist = realDistOnRoute;
+          const pos = getLatLngAtDistance(b.simDist);
+          b.lat = pos.lat;
+          b.lng = pos.lng;
+        }
+      }
+
+      busStore[CUSTOM_BUS_ID].eta = getNextStopETA(busStore[CUSTOM_BUS_ID].lat, busStore[CUSTOM_BUS_ID].lng, true);
+      renderUI();
+    });
+
+    // ==========================================
+    // 2. แผนที่ Leaflet & จุดจอด
+    // ==========================================
+    const map = L.map('map', { zoomControl: false }).setView([13.8188, 100.0398], 16);
+    L.control.zoom({ position: 'topright' }).addTo(map);
+
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19, attribution: 'Tiles &copy; Esri'
+    }).addTo(map);
+
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      const floatingBtn = document.getElementById('floatingOpenBtn');
+      sidebar.classList.toggle('collapsed');
+      floatingBtn.style.display = sidebar.classList.contains('collapsed') ? 'block' : 'none';
+      setTimeout(() => { map.invalidateSize(); }, 300);
+    }
+
+    const busStops = [
+      { name: "จุดจอดรถสายหลัก", lat: 13.815369, lng: 100.040501 },
+      { name: "อาคาร 50 ปี คณะอักษรศาสตร์", lat: 13.816301, lng: 100.040393 },
+      { name: "โรงอาหารสระแก้ว (Union)", lat: 13.818093, lng: 100.040179 },
+      { name: "หอสมุดพระราชวังสนามจันทร์", lat: 13.819427, lng: 100.040023 },
+      { name: "โรงอาหารเพชรรัตน์", lat: 13.821047, lng: 100.039771 },
+      { name: "ประตู ม. มุ่งหน้าจิตรกรรม", lat: 13.822927, lng: 100.039337 },
+      { name: "คณะจิตรกรรมฯ", lat: 13.821734, lng: 100.037357 },
+      { name: "คณะวิศวกรรมศาสตร์ฯ", lat: 13.820854, lng: 100.037524 },
+      { name: "แยกวิศวะฯ มุ่งหน้าเพชรรัตน์", lat: 13.821380, lng: 100.038779 },
+      { name: "ถนนสระบัว", lat: 13.822656, lng: 100.039766 },
+      { name: "หอพักเพชรรัตน์", lat: 13.821526, lng: 100.039889 },
+      { name: "คณะวิทยาศาสตร์", lat: 13.819614, lng: 100.040147 },
+      { name: "ตรงข้ามโรงอาหารสระแก้ว", lat: 13.817979, lng: 100.040353 },
+      { name: "ตรงข้ามคณะอักษรฯ", lat: 13.816291, lng: 100.040627 },
+      { name: "รอไปเส้นทางคณะศึกษาศาสตร์/โรงเรียนสาธิตฯ", lat: 13.815442, lng: 100.040748 },
+      { name: "แยกดนตรีสากล", lat: 13.816431, lng: 100.042813 },
+      { name: "ทางโค้งคณะศึกษาฯ", lat: 13.816817, lng: 100.043918 },
+      { name: "คณะศึกษาศาสตร์ (ตึกสีส้ม)", lat: 13.818046, lng: 100.042781 },
+      { name: "โรงเรียนสาธิตฯ", lat: 13.817346, lng: 100.042268 }
+    ];
+
+    busStops.forEach((stop, index) => {
+      const stopNumber = index + 1;
+      const stopIcon = L.divIcon({ className: 'custom-stop-icon', html: stopNumber, iconSize: [22, 22] });
+      const label = stop.name ? `ป้าย ${stopNumber}: ${stop.name}` : `ป้าย ${stopNumber}`;
+      L.marker([stop.lat, stop.lng], { icon: stopIcon }).addTo(map).bindPopup(`<b>🚏 ${label}</b>`);
+    });
+
+    const customRouteCoordinates = [
+      [13.814989, 100.04075], [13.81497, 100.040654], [13.816411, 100.040461], [13.816619, 100.040479],
+      [13.822373, 100.03968], [13.822414, 100.039629], [13.823047, 100.039557], [13.82293, 100.038444],
+      [13.822917, 100.037489], [13.822857, 100.037491], [13.822815, 100.037478], [13.822792, 100.03743],
+      [13.822761, 100.03743], [13.822742, 100.037127], [13.820823, 100.037403], [13.820948, 100.038379],
+      [13.821031, 100.038393], [13.821112, 100.038425], [13.821211, 100.038486], [13.821292, 100.038553],
+      [13.821341, 100.038647], [13.821365, 100.038792], [13.821495, 100.039803], [13.816609, 100.040479],
+      [13.8164, 100.040541], [13.816119, 100.040581], [13.816176, 100.041166], [13.816247, 100.041732],
+      [13.816346, 100.042647], [13.816335, 100.042743], [13.816447, 100.043872], [13.817163, 100.044065],
+      [13.817275, 100.044065], [13.818026, 100.044132], [13.818151, 100.04274], [13.817924, 100.042625],
+      [13.817541, 100.04237], [13.816723, 100.041678], [13.816247, 100.041729], [13.816119, 100.040579],
+      [13.814986, 100.040753]
+    ];
+    L.polyline(customRouteCoordinates, { color: '#2563eb', weight: 5, opacity: 0.85 }).addTo(map);
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+    }
+
+    const routeCumDist = [0];
+    for (let i = 0; i < customRouteCoordinates.length - 1; i++) {
+      routeCumDist.push(routeCumDist[i] + calculateDistance(customRouteCoordinates[i][0], customRouteCoordinates[i][1], customRouteCoordinates[i+1][0], customRouteCoordinates[i+1][1]));
+    }
+    const TOTAL_ROUTE_DISTANCE = routeCumDist[routeCumDist.length - 1];
+
+    function getLatLngAtDistance(distKm) {
+      let d = distKm % TOTAL_ROUTE_DISTANCE;
+      if (d < 0) d += TOTAL_ROUTE_DISTANCE;
+      for (let i = 0; i < routeCumDist.length - 1; i++) {
+        if (d >= routeCumDist[i] && d <= routeCumDist[i+1]) {
+          const segDist = routeCumDist[i+1] - routeCumDist[i];
+          const factor = segDist === 0 ? 0 : (d - routeCumDist[i]) / segDist;
+          return {
+            lat: customRouteCoordinates[i][0] + (customRouteCoordinates[i+1][0] - customRouteCoordinates[i][0]) * factor,
+            lng: customRouteCoordinates[i][1] + (customRouteCoordinates[i+1][1] - customRouteCoordinates[i][1]) * factor
+          };
+        }
+      }
+      return { lat: customRouteCoordinates[0][0], lng: customRouteCoordinates[0][1] };
+    }
+
+    function findClosestDistanceOnRoute(lat, lng) {
+      let minDist = Infinity, bestDist = 0;
+      for (let i = 0; i < customRouteCoordinates.length - 1; i++) {
+        for (let step = 0; step <= 5; step++) {
+          const f = step / 5;
+          const testLat = customRouteCoordinates[i][0] + (customRouteCoordinates[i+1][0] - customRouteCoordinates[i][0]) * f;
+          const testLng = customRouteCoordinates[i][1] + (customRouteCoordinates[i+1][1] - customRouteCoordinates[i][1]) * f;
+          const dist = calculateDistance(lat, lng, testLat, testLng);
+          if (dist < minDist) { minDist = dist; bestDist = routeCumDist[i] + (routeCumDist[i+1] - routeCumDist[i]) * f; }
+        }
+      }
+      return bestDist;
+    }
+
+    function isNearBusStop(lat, lng) {
+      for (const stop of busStops) {
+        if (calculateDistance(lat, lng, stop.lat, stop.lng) < 0.025) return stop.name || "ป้ายหยุดรถ";
+      }
+      return null;
+    }
+
+    // ==========================================
+    // 3. จัดการข้อมูลร่วมกับ Firestore
+    // ==========================================
+    const busMarkers = {};
+    const busStore = {};
+    let dailyFirestoreData = {};
+
+    function getFormattedDate(d = new Date()) {
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      return `${day}-${month}-${d.getFullYear()}`;
+    }
+
+    const TODAY_DOC_ID = getFormattedDate();
+
+    // ดึงประวัติระยะทางจาก Firestore แบบ Real-time Listener
+    db.collection('daily_distance').onSnapshot(snapshot => {
+      dailyFirestoreData = {};
+      snapshot.forEach(doc => {
+        dailyFirestoreData[doc.id] = doc.data();
+      });
+      if (dailyFirestoreData[TODAY_DOC_ID]) {
+        Object.keys(dailyFirestoreData[TODAY_DOC_ID]).forEach(busNo => {
+          if (busStore[busNo]) {
+            busStore[busNo].todayDistanceKm = dailyFirestoreData[TODAY_DOC_ID][busNo];
+          }
+        });
+      }
+      renderUI();
+    });
+
+    function saveDistanceToFirestore(busNo, distanceKm) {
+      db.collection('daily_distance').doc(TODAY_DOC_ID).set({
+        [busNo]: distanceKm
+      }, { merge: true }).catch(err => console.error("Firestore Save Error:", err));
+    }
+
+    function getNextStopETA(busLat, busLng, isAvailable) {
+      if (!isAvailable) return { stopName: 'หยุดให้บริการ', distanceM: 0, etaMinutes: -1, text: 'หยุดวิ่ง' };
+      let nearestIndex = -1, minDistance = Infinity;
+      busStops.forEach((stop, idx) => {
+        const d = calculateDistance(busLat, busLng, stop.lat, stop.lng);
+        if (d < minDistance) { minDistance = d; nearestIndex = idx; }
+      });
+      let targetIndex = minDistance < 0.04 ? (nearestIndex + 1) % busStops.length : nearestIndex;
+      const targetStop = busStops[targetIndex];
+      const targetDistKm = calculateDistance(busLat, busLng, targetStop.lat, targetStop.lng);
+      const targetDistM = Math.round(targetDistKm * 1000);
+      const etaMinutes = Math.ceil((targetDistKm / 15.0) * 60);
+      return {
+        stopName: targetStop.name ? `ป้าย ${targetIndex + 1} (${targetStop.name})` : `ป้าย ${targetIndex + 1}`,
+        distanceM: targetDistM,
+        etaMinutes: etaMinutes,
+        text: targetDistM < 40 ? "กำลังถึงป้าย" : `${etaMinutes} นาที`
+      };
+    }
+
+    async function fetchLiveBusData() {
+      try {
+        const response = await fetch('https://tabkaewbus.ugravity.net/api/bus_tracking_time?org_code=public');
+        if (!response.ok) return;
+        const data = await response.json();
+        const buses = data.bus_tracking || [];
+
+        buses.forEach(bus => {
+          const busNo = bus.bus_name;
+          const realLat = parseFloat(bus.cur_lat);
+          const realLng = parseFloat(bus.cur_lng);
+          const statusDesc = bus.bus_status_desc ? bus.bus_status_desc.trim() : 'หยุดให้บริการ';
+          const isAvailable = bus.is_bus_available;
+          const realDistOnRoute = findClosestDistanceOnRoute(realLat, realLng);
+
+          const initialDistance = (dailyFirestoreData[TODAY_DOC_ID] && dailyFirestoreData[TODAY_DOC_ID][busNo]) || 0.0;
+
+          if (!busStore[busNo]) {
+            busStore[busNo] = {
+              busNo: busNo,
+              lat: realLat, lng: realLng,
+              realLat: realLat, realLng: realLng,
+              lastRealLat: realLat, lastRealLng: realLng, // เก็บพิกัด GPS จริงก่อนหน้า
+              status: statusDesc, isAvailable: isAvailable,
+              todayDistanceKm: initialDistance,
+              simDist: realDistOnRoute,
+              pauseUntil: 0, lastStationStop: null
+            };
+          } else {
+            const b = busStore[busNo];
+            b.status = statusDesc;
+            b.isAvailable = isAvailable;
+
+            // คำนวณระยะทางจาก GPS จริงที่ขยับ (ไม่ใช่พิกัดจำลอง)
+            if (b.isAvailable) {
+              const realMoveDelta = calculateDistance(b.lastRealLat, b.lastRealLng, realLat, realLng);
+              // ต้องขยับจริงเกิน 15 เมตร (0.015 กม.) เพื่อตัดสัญญาณแกว่ง (GPS Drift) ตอนจอด
+              if (realMoveDelta > 0.015) {
+                b.todayDistanceKm += realMoveDelta;
+                b.lastRealLat = realLat;
+                b.lastRealLng = realLng;
+                saveDistanceToFirestore(busNo, parseFloat(b.todayDistanceKm.toFixed(2)));
+              }
+            } else {
+              b.lastRealLat = realLat;
+              b.lastRealLng = realLng;
+            }
+
+            b.realLat = realLat;
+            b.realLng = realLng;
+
+            // ถ้ารถจริงอยู่ห่างจากจุดจำลองเกิน 50 เมตร ให้ Snap เข้าหาจุดจริง
+            if (calculateDistance(b.lat, b.lng, realLat, realLng) > 0.05) {
+              b.simDist = realDistOnRoute;
+              const pos = getLatLngAtDistance(b.simDist);
+              b.lat = pos.lat;
+              b.lng = pos.lng;
+            }
+          }
+          busStore[busNo].eta = getNextStopETA(busStore[busNo].lat, busStore[busNo].lng, isAvailable);
+        });
+        renderUI();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    let lastAnimTime = performance.now();
+    function animateBuses(currentTime) {
+      const dt = (currentTime - lastAnimTime) / 1000;
+      lastAnimTime = currentTime;
+      const stepDistanceKm = (15 / 3600) * dt;
+
+      Object.keys(busStore).forEach(key => {
+        const b = busStore[key];
+        
+        // ถ้ารถหยุดให้บริการ ให้วางไว้ที่พิกัดจริงและหยุดวิ่งจำลองทันที
+        if (!b.isAvailable) {
+          b.lat = b.realLat;
+          b.lng = b.realLng;
+          if (busMarkers[b.busNo]) {
+            busMarkers[b.busNo].setLatLng([b.lat, b.lng]);
+          }
+          return;
+        }
+
+        if (b.pauseUntil > currentTime) return;
+        // หากตัวจำลองวิ่งไปไกลเกินจุดจริง 35 เมตร ให้รอรถจริง
+        if (calculateDistance(b.lat, b.lng, b.realLat, b.realLng) > 0.035) return;
+
+        b.simDist += stepDistanceKm;
+        const newPos = getLatLngAtDistance(b.simDist);
+        b.lat = newPos.lat; b.lng = newPos.lng;
+
+        const stopNear = isNearBusStop(b.lat, b.lng);
+        if (stopNear && b.lastStationStop !== stopNear) {
+          b.lastStationStop = stopNear;
+          b.pauseUntil = currentTime + 3000; // จอดป้าย 3 วินาที
+        } else if (!stopNear) {
+          b.lastStationStop = null;
+        }
+
+        if (busMarkers[b.busNo]) {
+          busMarkers[b.busNo].setLatLng([b.lat, b.lng]);
+        }
+      });
+      requestAnimationFrame(animateBuses);
+    }
+    requestAnimationFrame(animateBuses);
+
+    function renderUI() {
+      const busListContainer = document.getElementById('bus-list');
+      busListContainer.innerHTML = '';
+      const sortedBusKeys = Object.keys(busStore).sort((a, b) => parseInt(a) - parseInt(b));
+
+      sortedBusKeys.forEach(key => {
+        const bus = busStore[key];
+        const card = document.createElement('div');
+        card.className = `bus-card ${bus.isAvailable ? 'active' : ''}`;
+        card.onclick = () => {
+          map.panTo([bus.lat, bus.lng]);
+          if(busMarkers[bus.busNo]) busMarkers[bus.busNo].openPopup();
+        };
+
+        card.innerHTML = `
+          <div class="bus-card-top">
+            <div class="bus-info">
+              <div class="bus-number">รถเบอร์ ${bus.busNo}</div>
+              <div class="bus-status ${bus.isAvailable ? '' : 'stopped'}">${bus.status}</div>
+            </div>
+            <div class="bus-distance">
+              <div class="km-val">${bus.todayDistanceKm.toFixed(2)}</div>
+              <div class="km-unit">กม. วันนี้</div>
+            </div>
+          </div>
+          <div class="bus-eta-box">
+            <span style="color:#475569; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:200px;">
+              🚏 ${bus.eta ? bus.eta.stopName : 'กำลังคำนวณ'}
+            </span>
+            <span class="eta-badge ${bus.isAvailable ? '' : 'waiting'}">
+              ${bus.eta ? bus.eta.text : '-'}
+            </span>
+          </div>
+        `;
+        busListContainer.appendChild(card);
+
+        const busIcon = L.divIcon({
+          className: `custom-bus-icon ${bus.isAvailable ? '' : 'inactive'}`,
+          html: bus.busNo,
+          iconSize: [34, 34]
+        });
+
+        const popupContent = `
+          <b>🚌 รถเบอร์ ${bus.busNo}</b><br>
+          สถานะ: ${bus.status}<br>
+          ป้ายถัดไป: <b>${bus.eta ? bus.eta.stopName : '-'}</b><br>
+          เวลาที่จะถึง: <b style="color:#16a34a;">${bus.eta ? bus.eta.text : '-'}</b><br>
+          ระยะทางสะสมวันนี้: ${bus.todayDistanceKm.toFixed(2)} กม.
+        `;
+
+        if (busMarkers[bus.busNo]) {
+          busMarkers[bus.busNo].setPopupContent(popupContent);
+        } else {
+          busMarkers[bus.busNo] = L.marker([bus.lat, bus.lng], { icon: busIcon }).addTo(map).bindPopup(popupContent);
+        }
+      });
+    }
+
+    function openHistoryModal(busNoFilter) {
+      const modal = document.getElementById('historyModal');
+      const title = document.getElementById('modalTitle');
+      const body = document.getElementById('modalBody');
+
+      title.innerText = busNoFilter === 'ALL' ? '📅 ประวัติระยะทางรายวัน (Cloud Firestore)' : `📅 ประวัติระยะทาง รถเบอร์ ${busNoFilter}`;
+      body.innerHTML = '';
+
+      const dates = Object.keys(dailyFirestoreData).reverse();
+      if (dates.length === 0) {
+        body.innerHTML = '<div style="text-align:center; color:#94a3b8; padding:20px;">ยังไม่มีข้อมูลใน Cloud</div>';
+      } else {
+        dates.forEach(dateStr => {
+          let distVal = 0;
+          if (busNoFilter === 'ALL') {
+            distVal = Object.values(dailyFirestoreData[dateStr] || {}).reduce((a, b) => a + b, 0);
+          } else {
+            distVal = dailyFirestoreData[dateStr][busNoFilter] || 0;
+          }
+          const item = document.createElement('div');
+          item.className = 'history-item';
+          item.innerHTML = `<span class="date">${dateStr}</span><span class="dist">${distVal.toFixed(2)} กม.</span>`;
+          body.appendChild(item);
+        });
+      }
+      modal.style.display = 'flex';
+    }
+
+    function closeHistoryModal() { document.getElementById('historyModal').style.display = 'none'; }
+
+    // ==========================================
+    // 4. สภาพอากาศ Real-time
+    // ==========================================
+    let currentWeatherDetails = {}, hasAlertedRain = false;
+    function interpretWeatherCode(code) {
+      if (code === 0) return { icon: '☀️', text: 'แจ่มใส' };
+      if ([1, 2].includes(code)) return { icon: '⛅', text: 'มีเมฆบางส่วน' };
+      if (code === 3) return { icon: '☁️', text: 'มีเมฆมาก' };
+      if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return { icon: '🌧️', text: 'ฝนตก' };
+      if ([95, 96, 99].includes(code)) return { icon: '⛈️', text: 'พายุฟ้าคะนอง' };
+      return { icon: '🌤️', text: 'ทั่วไป' };
+    }
+
+    async function fetchWeatherData() {
+      try {
+        const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=13.8188&longitude=100.0398&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m&hourly=precipitation_probability&timezone=Asia%2FBangkok');
+        if (!res.ok) return;
+        const data = await res.json();
+        const current = data.current;
+        const wInfo = interpretWeatherCode(current.weather_code);
+
+        document.getElementById('weatherIcon').innerText = wInfo.icon;
+        document.getElementById('weatherTemp').innerText = `${Math.round(current.temperature_2m)}°C`;
+
+        const curH = new Date().getHours();
+        const rainProb = data.hourly?.precipitation_probability ? data.hourly.precipitation_probability[curH] : 0;
+        currentWeatherDetails = {
+          temp: `${Math.round(current.temperature_2m)}°C`, icon: wInfo.icon, desc: wInfo.text,
+          humidity: `${current.relative_humidity_2m}%`, wind: `${current.wind_speed_10m} กม./ชม.`,
+          rainMm: `${current.precipitation} มม.`, rainProb: `${rainProb}%`
+        };
+
+        if ((current.precipitation > 0 || rainProb >= 60) && !hasAlertedRain) {
+          const toast = document.getElementById('rainAlertToast');
+          toast.classList.add('show');
+          hasAlertedRain = true;
+          setTimeout(() => toast.classList.remove('show'), 6000);
+          setTimeout(() => { hasAlertedRain = false; }, 20 * 60 * 1000);
+        }
+      } catch (e) { console.error(e); }
+    }
+
+    function openWeatherModal() {
+      const modal = document.getElementById('weatherModal');
+      document.getElementById('modalWeatherIcon').innerText = currentWeatherDetails.icon || '⛅';
+      document.getElementById('modalWeatherDesc').innerText = currentWeatherDetails.desc || '-';
+      document.getElementById('modalWeatherTemp').innerText = currentWeatherDetails.temp || '--°C';
+      document.getElementById('weatherPrecipProb').innerText = currentWeatherDetails.rainProb || '-- %';
+      document.getElementById('weatherHumidity').innerText = currentWeatherDetails.humidity || '-- %';
+      document.getElementById('weatherWind').innerText = currentWeatherDetails.wind || '-- กม./ชม.';
+      document.getElementById('weatherRainMm').innerText = currentWeatherDetails.rainMm || '-- มม.';
+      modal.style.display = 'flex';
+    }
+
+    function closeWeatherModal() { document.getElementById('weatherModal').style.display = 'none'; }
+
+    window.onclick = function(e) {
+      if (e.target === document.getElementById('historyModal')) closeHistoryModal();
+      if (e.target === document.getElementById('weatherModal')) closeWeatherModal();
+    };
+
+    fetchLiveBusData();
+    setInterval(fetchLiveBusData, 3000);
+    fetchWeatherData();
+    setInterval(fetchWeatherData, 60000);
+  </script>
+</body>
+</html>

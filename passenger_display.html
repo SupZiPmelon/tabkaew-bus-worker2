@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>จอแสดงผลผู้โดยสาร - ทับแก้ว EV Shuttle</title>
+
+  <!-- Prompt Font & FontAwesome -->
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Leaflet JS & Firebase Compat -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-database-compat.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Prompt', sans-serif; }
+    body {
+      background-color: #0b0f19;
+      color: #ffffff;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* แถบด้านบน: ชื่อสถานะจอ */
+    header {
+      background: #111827;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #1f2937;
+      height: 52px;
+      z-index: 10;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #38bdf8;
+    }
+    .header-time {
+      font-size: 0.95rem;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+
+    /* ส่วนเนื้อหาหลักแบ่งบน-ล่าง */
+    .main-grid {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      height: calc(100vh - 52px - 44px);
+    }
+
+    /* 1. ส่วนกล้องหน้ารถ */
+    .cam-section {
+      height: 45%;
+      background: #000;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 2px solid #1f2937;
+    }
+    #cameraView {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .cam-badge {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(220, 38, 38, 0.85);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      z-index: 5;
+    }
+    .cam-toggle-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      z-index: 5;
+    }
+
+    /* 2. ส่วนแผนที่ */
+    .map-section {
+      height: 55%;
+      position: relative;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* การ์ดลอยบอกป้ายถัดไปบนแผนที่ */
+    .next-stop-floating-card {
+      position: absolute;
+      top: 12px;
+      left: 16px;
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(8px);
+      padding: 10px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .next-stop-floating-card i {
+      font-size: 1.5rem;
+      color: #38bdf8;
+    }
+    .next-stop-info .label {
+      font-size: 0.7rem;
+      color: #94a3b8;
+    }
+    .next-stop-info .stop-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+
+    /* ไอคอนจุดจอดและไอคอนรถ */
+    .custom-stop-icon {
+      background-color: #0284c7;
+      color: white;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      text-align: center;
+      line-height: 20px;
+      font-weight: 600;
+      font-size: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+    .custom-bus-icon {
+      background-color: #2563eb;
+      color: white;
+      border-radius: 50%;
+      border: 3px solid #ffffff;
+      text-align: center;
+      line-height: 34px;
+      font-weight: 700;
+      font-size: 15px;
+      box-shadow: 0 4px 12px rgba(37,99,235,0.6);
+      width: 38px !important;
+      height: 38px !important;
+    }
+
+    /* 3. แถบโฆษณา / ประชาสัมพันธ์ข้อความวิ่ง (Ticker) */
+    .ad-ticker-bar {
+      height: 44px;
+      background: #047857;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    .ticker-label {
+      background: #065f46;
+      color: #a7f3d0;
+      padding: 0 16px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+      flex-shrink: 0;
+      gap: 6px;
+      z-index: 2;
+    }
+    .ticker-content {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .ticker-text {
+      display: inline-block;
+      padding-left: 100%;
+      animation: marquee 25s linear infinite;
+      font-size: 0.9rem;
+      color: #ffffff;
+      font-weight: 400;
+    }
+    @keyframes marquee {
+      0% { transform: translate(0, 0); }
+      100% { transform: translate(-100%, 0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- แถบ Header -->
+  <header>
+    <div class="header-brand">
+      <i class="fa-solid fa-tv"></i>
+      <span>ทับแก้ว EV Shuttle • จอแสดงผลในห้องโดยสาร</span>
+    </div>
+    <div class="header-time" id="clockText">--:--:--</div>
+  </header>
+
+  <!-- ส่วนจอหลัก: กล้องหน้ารถ (บน) + แผนที่ (ล่าง) -->
+  <div class="main-grid">
+    <!-- จอกล้องหน้ารถจาก Webcam -->
+    <div class="cam-section">
+      <div class="cam-badge">
+        <i class="fa-solid fa-circle" style="font-size: 0.5rem; animation: pulse 1.5s infinite;"></i> LIVE หน้ารถ
+      </div>
+      <button class="cam-toggle-btn" onclick="initCamera()">
+        <i class="fa-solid fa-camera"></i> เปิด/สลับกล้อง
+      </button>
+      <video id="cameraView" autoplay playsinline muted></video>
+    </div>
+
+    <!-- จอแผนที่ตำแหน่งรถ -->
+    <div class="map-section">
+      <div class="next-stop-floating-card">
+        <i class="fa-solid fa-location-dot"></i>
+        <div class="next-stop-info">
+          <div class="label">สถานีถัดไป (NEXT STOP)</div>
+          <div class="stop-title" id="displayNextStop">กำลังคำนวณ...</div>
+        </div>
+      </div>
+      <div id="map"></div>
+    </div>
+  </div>
+
+  <!-- แถบโฆษณา/ข้อความวิ่งด้านล่าง -->
+  <footer class="ad-ticker-bar">
+    <div class="ticker-label">
+      <i class="fa-solid fa-bullhorn"></i> ข่าวประชาสัมพันธ์:
+    </div>
+    <div class="ticker-content">
+      <div class="ticker-text" id="adText">
+        ยินดีต้อนรับสู่บริการรถรางไฟฟ้า มหาวิทยาลัยศิลปากร พระราชวังสนามจันทร์ • รถให้บริการฟรีทุกวัน • โปรดระมัดระวังขณะก้าวขึ้นและลงจากรถ • สแกน QR Code เพื่อเช็กเวลารถแบบสดๆ ได้ทุกสถานี
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // --- 1. นาฬิกาดิจิทัลหัวจอ ---
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('clockText').innerText = now.toLocaleTimeString('th-TH');
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // --- 2. ดึงภาพกล้อง Webcam คอมพิวเตอร์ ---
+    async function initCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+        const video = document.getElementById('cameraView');
+        video.srcObject = stream;
+      } catch (err) {
+        console.warn("ไม่สามารถเปิดกล้อง Webcam ได้:", err);
+      }
+    }
+    // พยายามเปิดกล้องอัตโนมัติเมื่อโหลดหน้า
+    window.addEventListener('load', initCamera);
+
+    // --- 3. ข้อมูลจุดจอด 19 ป้าย และเส้นทางจาก map.html ---
+    const busStops = [
+      { name: "จุดจอดรถสายหลัก", lat: 13.815369, lng: 100.040501 },
+      { name: "อาคาร 50 ปี คณะอักษรศาสตร์", lat: 13.816301, lng: 100.040393 },
+      { name: "โรงอาหารสระแก้ว (Union)", lat: 13.818093, lng: 100.040179 },
+      { name: "หอสมุดพระราชวังสนามจันทร์", lat: 13.819427, lng: 100.040023 },
+      { name: "โรงอาหารเพชรรัตน์", lat: 13.821047, lng: 100.039771 },
+      { name: "ประตู ม. มุ่งหน้าจิตรกรรม", lat: 13.822927, lng: 100.039337 },
+      { name: "คณะจิตรกรรมฯ", lat: 13.821734, lng: 100.037357 },
+      { name: "คณะวิศวกรรมศาสตร์ฯ", lat: 13.820854, lng: 100.037524 },
+      { name: "แยกวิศวะฯ มุ่งหน้าเพชรรัตน์", lat: 13.821380, lng: 100.038779 },
+      { name: "ถนนสระบัว", lat: 13.822656, lng: 100.039766 },
+      { name: "หอพักเพชรรัตน์", lat: 13.821526, lng: 100.039889 },
+      { name: "คณะวิทยาศาสตร์", lat: 13.819614, lng: 100.040147 },
+      { name: "ตรงข้ามโรงอาหารสระแก้ว", lat: 13.817979, lng: 100.040353 },
+      { name: "ตรงข้ามคณะอักษรฯ", lat: 13.816291, lng: 100.040627 },
+      { name: "รอไปเส้นทางคณะศึกษาศาสตร์/โรงเรียนสาธิตฯ", lat: 13.815442, lng: 100.040748 },
+      { name: "แยกดนตรีสากล", lat: 13.816431, lng: 100.042813 },
+      { name: "ทางโค้งคณะศึกษาฯ", lat: 13.816817, lng: 100.043918 },
+      { name: "คณะศึกษาศาสตร์ (ตึกสีส้ม)", lat: 13.818046, lng: 100.042781 },
+      { name: "โรงเรียนสาธิตฯ", lat: 13.817346, lng: 100.042268 }
+    ];
+
+    const customRouteCoordinates = [
+      [13.814989, 100.04075], [13.81497, 100.040654], [13.816411, 100.040461], [13.816619, 100.040479],
+      [13.822373, 100.03968], [13.822414, 100.039629], [13.823047, 100.039557], [13.82293, 100.038444],
+      [13.822917, 100.037489], [13.822857, 100.037491], [13.822815, 100.037478], [13.822792, 100.03743],
+      [13.822761, 100.03743], [13.822742, 100.037127], [13.820823, 100.037403], [13.820948, 100.038379],
+      [13.821031, 100.038393], [13.821112, 100.038425], [13.821211, 100.038486], [13.821292, 100.038553],
+      [13.821341, 100.038647], [13.821365, 100.038792], [13.821495, 100.039803], [13.816609, 100.040479],
+      [13.8164, 100.040541], [13.816119, 100.040581], [13.816176, 100.041166], [13.816247, 100.041732],
+      [13.816346, 100.042647], [13.816335, 100.042743], [13.816447, 100.043872], [13.817163, 100.044065],
+      [13.817275, 100.044065], [13.818026, 100.044132], [13.818151, 100.04274], [13.817924, 100.042625],
+      [13.817541, 100.04237], [13.816723, 100.041678], [13.816247, 100.041729], [13.816119, 100.040579],
+      [13.814986, 100.040753]
+    ];
+
+    // --- 4. สร้างแผนที่ Leaflet (ArcGIS World Street Map) ---
+    const map = L.map('map', { zoomControl: false }).setView([13.8188, 100.0398], 16);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: 'Tiles &copy; Esri'
+    }).addTo(map);
+
+    L.polyline(customRouteCoordinates, { color: '#2563eb', weight: 5, opacity: 0.85 }).addTo(map);
+
+    busStops.forEach((stop, index) => {
+      const stopNumber = index + 1;
+      const stopIcon = L.divIcon({ className: 'custom-stop-icon', html: stopNumber, iconSize: [22, 22] });
+      L.marker([stop.lat, stop.lng], { icon: stopIcon }).addTo(map);
+    });
+
+    const busIcon = L.divIcon({ className: 'custom-bus-icon', html: '99', iconSize: [36, 36] });
+    const busMarker = L.marker([13.815369, 100.040501], { icon: busIcon }).addTo(map);
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+    }
+
+    // --- 5. เชื่อมต่อ GPS สด ESP32 (Realtime Database) ---
+    const customGpsApp = firebase.initializeApp({
+      databaseURL: "https://gps-001-1b983-default-rtdb.asia-southeast1.firebasedatabase.app"
+    }, "customGpsApp");
+
+    const rtdb = customGpsApp.database();
+    rtdb.ref('/GPS_Data').on('value', (snapshot) => {
+      const data = snapshot.val();
+      if (!data || data.latitude === undefined || data.longitude === undefined) return;
+
+      const lat = parseFloat(data.latitude);
+      const lng = parseFloat(data.longitude);
+
+      if (lat && lng) {
+        busMarker.setLatLng([lat, lng]);
+        map.panTo([lat, lng]);
+
+        // คำนวณหาสถานีถัดไป
+        let nearestStop = busStops[0];
+        let minDist = Infinity;
+        let targetIdx = 0;
+
+        busStops.forEach((stop, idx) => {
+          const d = calculateDistance(lat, lng, stop.lat, stop.lng);
+          if (d < minDist) {
+            minDist = d;
+            nearestStop = stop;
+            targetIdx = idx;
+          }
+        });
+
+        if (minDist < 0.035) {
+          targetIdx = (targetIdx + 1) % busStops.length;
+          nearestStop = busStops[targetIdx];
+        }
+
+        document.getElementById('displayNextStop').innerText = `ป้ายที่ ${targetIdx + 1}: ${nearestStop.name}`;
+      }
+    });
+  </script>
+</body>
+</html>

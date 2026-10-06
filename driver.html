@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>สำหรับคนขับ - ระบบนำทาง ทับแก้ว EV Shuttle</title>
+
+  <!-- Prompt Font & FontAwesome -->
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Firebase Compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-database-compat.js"></script>
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Prompt', sans-serif; }
+    body {
+      background-color: #0f172a;
+      color: #f8fafc;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Modal เลือกรถ */
+    #select-bus-view {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(8px);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .select-card {
+      background: #1e293b;
+      width: 100%;
+      max-width: 440px;
+      border-radius: 20px;
+      padding: 24px;
+      border: 1px solid #334155;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .select-card h2 {
+      font-size: 1.3rem;
+      margin-bottom: 8px;
+      color: #38bdf8;
+      text-align: center;
+    }
+    .bus-table-container {
+      max-height: 280px;
+      overflow-y: auto;
+      margin-top: 16px;
+      border: 1px solid #334155;
+      border-radius: 12px;
+    }
+    .bus-select-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .bus-select-table th, .bus-select-table td {
+      padding: 12px;
+      text-align: center;
+      border-bottom: 1px solid #334155;
+    }
+    .bus-select-table th {
+      background: #0f172a;
+      color: #94a3b8;
+      font-size: 0.85rem;
+    }
+    .bus-select-table tr:hover {
+      background: #334155;
+      cursor: pointer;
+    }
+
+    /* แผนที่เต็มจอ */
+    #map {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+
+    /* แถบนำทางด้านบน (Navigation Turn Banner สไตล์ Google Maps) */
+    .nav-top-banner {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      max-width: 460px;
+      margin: 0 auto;
+      background: #064e3b;
+      color: white;
+      border-radius: 18px;
+      padding: 14px 18px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .nav-turn-icon {
+      font-size: 2.2rem;
+      color: #34d399;
+      width: 44px;
+      display: flex;
+      justify-content: center;
+    }
+    .nav-instruction {
+      flex: 1;
+      overflow: hidden;
+    }
+    .nav-instruction .dist-to-turn {
+      font-size: 1.45rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .nav-instruction .turn-desc {
+      font-size: 0.88rem;
+      color: #d1fae5;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .nav-eta-badge {
+      background: rgba(0, 0, 0, 0.25);
+      padding: 6px 12px;
+      border-radius: 12px;
+      text-align: right;
+    }
+    .nav-eta-badge .eta-min {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #34d399;
+    }
+    .nav-eta-badge .eta-lbl {
+      font-size: 0.7rem;
+      color: #a7f3d0;
+    }
+
+    /* ไอคอนจุดจอดตามแบบไฟล์ map.html */
+    .custom-stop-icon {
+      background-color: #0284c7;
+      color: white;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      text-align: center;
+      line-height: 20px;
+      font-weight: 600;
+      font-size: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+
+    /* ไอคอนรถนำทาง */
+    .nav-car-icon {
+      background: #2563eb;
+      color: white;
+      border-radius: 50%;
+      border: 3px solid #ffffff;
+      text-align: center;
+      line-height: 38px;
+      font-size: 18px;
+      box-shadow: 0 4px 12px rgba(37,99,235,0.6);
+      width: 40px !important;
+      height: 40px !important;
+    }
+
+    /* ปุ่ม Re-Center */
+    .btn-recenter {
+      position: absolute;
+      right: 16px;
+      bottom: 230px;
+      background: #1e293b;
+      color: #38bdf8;
+      border: 1px solid #334155;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      cursor: pointer;
+      z-index: 1000;
+    }
+
+    /* แถบควบคุมด้านล่าง */
+    .control-panel {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #1e293b;
+      border-top: 2px solid #334155;
+      border-radius: 24px 24px 0 0;
+      padding: 16px 20px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 -10px 25px rgba(0,0,0,0.5);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .stop-cards {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      scroll-behavior: smooth;
+    }
+    .stop-card {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      padding: 10px 14px;
+      min-width: 150px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .stop-card.active {
+      border-color: #38bdf8;
+      background: #082f49;
+    }
+    .stop-card .stop-name {
+      font-size: 0.78rem;
+      color: #94a3b8;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 130px;
+    }
+    .stop-card .passenger-count {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: #38bdf8;
+      margin-top: 4px;
+    }
+
+    .action-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn-action {
+      flex: 1;
+      padding: 14px;
+      border-radius: 12px;
+      border: none;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-next-stop {
+      background: #10b981;
+      color: white;
+    }
+    .btn-next-stop:active {
+      background: #059669;
+      transform: scale(0.98);
+    }
+    .btn-custom-speech {
+      width: 52px;
+      height: 52px;
+      border-radius: 12px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      font-size: 1.3rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* Modal พิมพ์เสียง AI */
+    #speech-modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 10000;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    .modal-box {
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .modal-box textarea {
+      width: 100%;
+      height: 90px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 10px;
+      color: white;
+      font-family: 'Prompt', sans-serif;
+      resize: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- กล่องเลือกเบอร์รถ -->
+  <div id="select-bus-view">
+    <div class="select-card">
+      <h2><i class="fa-solid fa-route"></i> เริ่มต้นระบบนำทาง</h2>
+      <p style="font-size:0.8rem; color:#94a3b8; text-align:center;">กรุณาคลิกเลือกเบอร์รถที่ท่านกำลังขับขี่</p>
+      
+      <div class="bus-table-container">
+        <table class="bus-select-table">
+          <thead>
+            <tr>
+              <th>รูปรถ</th>
+              <th>เบอร์รถ</th>
+              <th>สถานะ</th>
+            </tr>
+          </thead>
+          <tbody id="bus-table-list">
+            <tr onclick="selectBus('99')">
+              <td><i class="fa-solid fa-bus-simple" style="color:#10b981; font-size:1.3rem;"></i></td>
+              <td><strong>รถเบอร์ 99 (ESP32)</strong></td>
+              <td><span style="color:#10b981;">เชื่อมต่อ GPS สด</span></td>
+            </tr>
+            <tr onclick="selectBus('1')">
+              <td><i class="fa-solid fa-bus-simple" style="color:#38bdf8; font-size:1.3rem;"></i></td>
+              <td><strong>รถเบอร์ 1</strong></td>
+              <td><span style="color:#94a3b8;">สแตนด์บาย</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- แผนที่นำทาง -->
+  <div id="map"></div>
+
+  <!-- กล่องคำสั่งนำทางด้านบน -->
+  <div class="nav-top-banner">
+    <div class="nav-turn-icon" id="turn-icon">
+      <i class="fa-solid fa-arrow-up"></i>
+    </div>
+    <div class="nav-instruction">
+      <div class="dist-to-turn" id="turn-distance">-- ม.</div>
+      <div class="turn-desc" id="turn-instruction">มุ่งหน้าไปยังป้ายถัดไป</div>
+    </div>
+    <div class="nav-eta-badge">
+      <div class="eta-min" id="eta-time">-- นาที</div>
+      <div class="eta-lbl">เวลาถึง</div>
+    </div>
+  </div>
+
+  <!-- ปุ่มล็อกแผนที่กลับมาที่ตัวรถ -->
+  <button class="btn-recenter" onclick="recenterMap()" title="กลับมาที่ตำแหน่งรถ">
+    <i class="fa-solid fa-crosshairs"></i>
+  </button>
+
+  <!-- แผงด้านล่างสำหรับคนขับ -->
+  <div class="control-panel">
+    <div class="stop-cards" id="stop-cards-container">
+      <!-- สร้างการ์ดป้ายหยุดรถอัตโนมัติตาม busStops -->
+    </div>
+
+    <div class="action-row">
+      <button class="btn-action btn-next-stop" onclick="announceNextStop()">
+        <i class="fa-solid fa-volume-high"></i> ประกาศป้ายถัดไป
+      </button>
+      <button class="btn-custom-speech" onclick="openSpeechModal()" title="พิมพ์ข้อความให้ AI อ่าน">
+        <i class="fa-solid fa-plus"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal พิมพ์ข้อความ AI -->
+  <div id="speech-modal">
+    <div class="modal-box">
+      <h3 style="font-size:1.1rem; color:#38bdf8;"><i class="fa-solid fa-comment-dots"></i> ประกาศด้วยเสียง AI</h3>
+      <textarea id="custom-text-input" placeholder="พิมพ์ข้อความที่ต้องการให้ AI อ่านออกเสียง..."></textarea>
+      <div style="display:flex; gap:10px;">
+        <button onclick="speakCustomText()" style="flex:1; background:#10b981; color:white; border:none; padding:10px; border-radius:8px; font-weight:600; cursor:pointer;">
+          <i class="fa-solid fa-bullhorn"></i> พูดทันที
+        </button>
+        <button onclick="closeSpeechModal()" style="background:#475569; color:white; border:none; padding:10px 16px; border-radius:8px; cursor:pointer;">
+          ปิด
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- 1. Firebase Config ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyCWzHhoHD6F-WzM-CB_NZI40qcsaieo5Q0",
+      authDomain: "tabkaew-bus-tracker.firebaseapp.com",
+      projectId: "tabkaew-bus-tracker",
+      storageBucket: "tabkaew-bus-tracker.firebasestorage.app",
+      messagingSenderId: "837452814060",
+      appId: "1:837452814060:web:1b69e72f7cb263cebef7c9",
+      measurementId: "G-3WKFL7KSWD"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let currentBusId = "99";
+    let currentStopIndex = 1;
+    let currentCarPos = [13.815369, 100.040501];
+
+    // ==========================================
+    // 2. ข้อมูลจุดจอด 19 ป้าย จาก map.html แบบ 100%
+    // ==========================================
+    const busStops = [
+      { name: "จุดจอดรถสายหลัก", lat: 13.815369, lng: 100.040501 },
+      { name: "อาคาร 50 ปี คณะอักษรศาสตร์", lat: 13.816301, lng: 100.040393 },
+      { name: "โรงอาหารสระแก้ว (Union)", lat: 13.818093, lng: 100.040179 },
+      { name: "หอสมุดพระราชวังสนามจันทร์", lat: 13.819427, lng: 100.040023 },
+      { name: "โรงอาหารเพชรรัตน์", lat: 13.821047, lng: 100.039771 },
+      { name: "ประตู ม. มุ่งหน้าจิตรกรรม", lat: 13.822927, lng: 100.039337 },
+      { name: "คณะจิตรกรรมฯ", lat: 13.821734, lng: 100.037357 },
+      { name: "คณะวิศวกรรมศาสตร์ฯ", lat: 13.820854, lng: 100.037524 },
+      { name: "แยกวิศวะฯ มุ่งหน้าเพชรรัตน์", lat: 13.821380, lng: 100.038779 },
+      { name: "ถนนสระบัว", lat: 13.822656, lng: 100.039766 },
+      { name: "หอพักเพชรรัตน์", lat: 13.821526, lng: 100.039889 },
+      { name: "คณะวิทยาศาสตร์", lat: 13.819614, lng: 100.040147 },
+      { name: "ตรงข้ามโรงอาหารสระแก้ว", lat: 13.817979, lng: 100.040353 },
+      { name: "ตรงข้ามคณะอักษรฯ", lat: 13.816291, lng: 100.040627 },
+      { name: "รอไปเส้นทางคณะศึกษาศาสตร์/โรงเรียนสาธิตฯ", lat: 13.815442, lng: 100.040748 },
+      { name: "แยกดนตรีสากล", lat: 13.816431, lng: 100.042813 },
+      { name: "ทางโค้งคณะศึกษาฯ", lat: 13.816817, lng: 100.043918 },
+      { name: "คณะศึกษาศาสตร์ (ตึกสีส้ม)", lat: 13.818046, lng: 100.042781 },
+      { name: "โรงเรียนสาธิตฯ", lat: 13.817346, lng: 100.042268 }
+    ];
+
+    // ==========================================
+    // 3. ข้อมูลเส้นทาง Polyline จาก map.html แบบ 100%
+    // ==========================================
+    const customRouteCoordinates = [
+      [13.814989, 100.04075], [13.81497, 100.040654], [13.816411, 100.040461], [13.816619, 100.040479],
+      [13.822373, 100.03968], [13.822414, 100.039629], [13.823047, 100.039557], [13.82293, 100.038444],
+      [13.822917, 100.037489], [13.822857, 100.037491], [13.822815, 100.037478], [13.822792, 100.03743],
+      [13.822761, 100.03743], [13.822742, 100.037127], [13.820823, 100.037403], [13.820948, 100.038379],
+      [13.821031, 100.038393], [13.821112, 100.038425], [13.821211, 100.038486], [13.821292, 100.038553],
+      [13.821341, 100.038647], [13.821365, 100.038792], [13.821495, 100.039803], [13.816609, 100.040479],
+      [13.8164, 100.040541], [13.816119, 100.040581], [13.816176, 100.041166], [13.816247, 100.041732],
+      [13.816346, 100.042647], [13.816335, 100.042743], [13.816447, 100.043872], [13.817163, 100.044065],
+      [13.817275, 100.044065], [13.818026, 100.044132], [13.818151, 100.04274], [13.817924, 100.042625],
+      [13.817541, 100.04237], [13.816723, 100.041678], [13.816247, 100.041729], [13.816119, 100.040579],
+      [13.814986, 100.040753]
+    ];
+
+    // --- 4. สร้างแผนที่ Leaflet (ใช้ ArcGIS World Street Map เหมือน map.html) ---
+    const map = L.map('map', { zoomControl: false }).setView(currentCarPos, 16);
+    
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: 'Tiles &copy; Esri'
+    }).addTo(map);
+
+    // วาดเส้นทางสีน้ำเงิน (Navigation Route)
+    L.polyline(customRouteCoordinates, {
+      color: '#2563eb',
+      weight: 6,
+      opacity: 0.85
+    }).addTo(map);
+
+    // ปักหมุดทั้ง 19 ป้ายหยุดรถ
+    busStops.forEach((stop, index) => {
+      const stopNumber = index + 1;
+      const stopIcon = L.divIcon({
+        className: 'custom-stop-icon',
+        html: stopNumber,
+        iconSize: [22, 22]
+      });
+      const label = stop.name ? `ป้าย ${stopNumber}: ${stop.name}` : `ป้าย ${stopNumber}`;
+      L.marker([stop.lat, stop.lng], { icon: stopIcon })
+        .addTo(map)
+        .bindPopup(`<b>🚏 ${label}</b>`);
+    });
+
+    // วาดการ์ดป้ายหยุดรถทั้งหมดลงในแถบด้านล่าง
+    const stopCardsContainer = document.getElementById('stop-cards-container');
+    busStops.forEach((stop, idx) => {
+      const card = document.createElement('div');
+      card.className = `stop-card ${idx === 0 ? 'active' : ''}`;
+      card.id = `card-stop-${idx + 1}`;
+      card.innerHTML = `
+        <div class="stop-name" title="${stop.name}">ป้าย ${idx + 1}: ${stop.name}</div>
+        <div class="passenger-count" id="count-stop-${idx + 1}">0 คน</div>
+      `;
+      stopCardsContainer.appendChild(card);
+    });
+
+    // ไอคอนรถนำทาง
+    const carIcon = L.divIcon({
+      className: 'nav-car-icon',
+      html: '<i class="fa-solid fa-location-arrow"></i>',
+      iconSize: [40, 40]
+    });
+    let navCarMarker = L.marker(currentCarPos, { icon: carIcon }).addTo(map);
+
+    // คำนวณระยะทางแบบ Haversine
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+    }
+
+    // ฟังก์ชันอัปเดตระบบนำทาง (ETA & Turn-by-turn)
+    function updateNavigation(lat, lng) {
+      currentCarPos = [lat, lng];
+      navCarMarker.setLatLng([lat, lng]);
+      map.panTo([lat, lng], { animate: true, duration: 1.0 });
+
+      let nearestStop = busStops[0];
+      let minDistance = Infinity;
+      let targetIndex = 0;
+
+      busStops.forEach((stop, idx) => {
+        const d = calculateDistance(lat, lng, stop.lat, stop.lng);
+        if (d < minDistance) {
+          minDistance = d;
+          nearestStop = stop;
+          targetIndex = idx;
+        }
+      });
+
+      // ถ้าใกล้ป้ายมาก (น้อยกว่า 40 ม.) ให้เล็งไปที่ป้ายถัดไป
+      if (minDistance < 0.04) {
+        targetIndex = (targetIndex + 1) % busStops.length;
+        nearestStop = busStops[targetIndex];
+        minDistance = calculateDistance(lat, lng, nearestStop.lat, nearestStop.lng);
+      }
+
+      const distMeters = Math.round(minDistance * 1000);
+      const etaMinutes = Math.max(1, Math.ceil((minDistance / 15.0) * 60));
+
+      document.getElementById('turn-distance').innerText = distMeters < 35 ? 'ถึงจุดจอดแล้ว' : `${distMeters} ม.`;
+      document.getElementById('turn-instruction').innerText = `ตรงไป: ป้าย ${targetIndex + 1} (${nearestStop.name})`;
+      document.getElementById('eta-time').innerText = `${etaMinutes} นาที`;
+
+      const turnIcon = document.getElementById('turn-icon');
+      if (distMeters < 35) {
+        turnIcon.innerHTML = '<i class="fa-solid fa-flag-checkered" style="color:#fbbf24;"></i>';
+      } else {
+        turnIcon.innerHTML = '<i class="fa-solid fa-arrow-up"></i>';
+      }
+    }
+
+    function recenterMap() {
+      map.setView(currentCarPos, 17, { animate: true });
+    }
+
+    // --- 5. ดึง Realtime GPS ของ ESP32 (รถเบอร์ 99) ---
+    const customGpsApp = firebase.initializeApp({
+      databaseURL: "https://gps-001-1b983-default-rtdb.asia-southeast1.firebasedatabase.app"
+    }, "customGpsApp");
+
+    const rtdb = customGpsApp.database();
+    rtdb.ref('/GPS_Data').on('value', (snapshot) => {
+      const data = snapshot.val();
+      if (!data || data.latitude === undefined || data.longitude === undefined) return;
+      const lat = parseFloat(data.latitude);
+      const lng = parseFloat(data.longitude);
+      if (lat && lng) {
+        updateNavigation(lat, lng);
+      }
+    });
+
+    // --- 6. ฟังก์ชันเลือกรถ & ดึงข้อมูลคนลงจาก Firestore ---
+    function selectBus(busNo) {
+      currentBusId = busNo;
+      document.getElementById('select-bus-view').style.display = 'none';
+      listenPassengerCount(busNo);
+    }
+
+    function listenPassengerCount(busNo) {
+      db.collection("bus_passengers").doc(`bus_${busNo}`).onSnapshot((doc) => {
+        if (doc.exists) {
+          const data = doc.data();
+          busStops.forEach((_, idx) => {
+            const el = document.getElementById(`count-stop-${idx + 1}`);
+            if (el) {
+              el.innerText = `${data[`stop_${idx + 1}`] || 0} คน`;
+            }
+          });
+        }
+      });
+    }
+
+    // --- 7. ระบบเสียง Google แปลภาษา ---
+    let currentAudio = null;
+
+    function speakGoogleTTS(text) {
+      if (!text) return;
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+      }
+
+      const encodedText = encodeURIComponent(text);
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=th&client=tw-ob&q=${encodedText}`;
+      currentAudio = new Audio(url);
+      currentAudio.play().catch(err => {
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'th-TH';
+          window.speechSynthesis.speak(utterance);
+        }
+      });
+    }
+
+    function announceNextStop() {
+      const stop = busStops[currentStopIndex - 1];
+      if (stop) {
+        speakGoogleTTS(`สถานีต่อไป ป้ายที่ ${currentStopIndex} ${stop.name} ผู้โดยสารโปรดเตรียมตัว`);
+
+        document.querySelectorAll('.stop-card').forEach(c => c.classList.remove('active'));
+        const activeCard = document.getElementById(`card-stop-${currentStopIndex}`);
+        if (activeCard) {
+          activeCard.classList.add('active');
+          activeCard.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }
+
+        currentStopIndex = (currentStopIndex % busStops.length) + 1;
+      }
+    }
+
+    function openSpeechModal() {
+      document.getElementById('speech-modal').style.display = 'flex';
+    }
+    function closeSpeechModal() {
+      document.getElementById('speech-modal').style.display = 'none';
+    }
+    function speakCustomText() {
+      const text = document.getElementById('custom-text-input').value.trim();
+      if (text) {
+        speakGoogleTTS(text);
+        closeSpeechModal();
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ทดสอบระบบปุ่มผู้โดยสาร - ทับแก้ว EV Shuttle</title>
+
+  <!-- Prompt Font & FontAwesome -->
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Firebase Compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Prompt', sans-serif; }
+    body {
+      background: #0f172a;
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 16px;
+    }
+
+    .mobile-simulator {
+      background: #1e293b;
+      width: 100%;
+      max-width: 420px;
+      border-radius: 28px;
+      padding: 24px 20px;
+      border: 1px solid #334155;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .sim-header {
+      text-align: center;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 14px;
+    }
+    .sim-header h1 {
+      font-size: 1.25rem;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .sim-header p {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+
+    .bus-select-box {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #0f172a;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      font-size: 0.85rem;
+    }
+    .bus-select-box select {
+      background: #1e293b;
+      color: white;
+      border: 1px solid #475569;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-family: 'Prompt', sans-serif;
+      outline: none;
+    }
+
+    .section-title {
+      font-size: 0.9rem;
+      color: #cbd5e1;
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Grid ปุ่มเลือกป้าย */
+    .stop-btn-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      max-height: 250px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .btn-stop {
+      background: #0f172a;
+      border: 1.5px solid #334155;
+      border-radius: 14px;
+      padding: 12px 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #f1f5f9;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      gap: 4px;
+    }
+    .btn-stop:hover {
+      border-color: #38bdf8;
+      background: #082f49;
+    }
+    .btn-stop:active {
+      transform: scale(0.96);
+    }
+    .btn-stop .badge-num {
+      background: #38bdf8;
+      color: #0f172a;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
+    .btn-stop .name {
+      font-size: 0.75rem;
+      color: #cbd5e1;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 130px;
+    }
+
+    /* ปุ่มกริ่งหยุดรถขนาดใหญ่ตามภาพร่าง */
+    .bell-btn-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 0;
+    }
+    .btn-bell {
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #ef4444 0%, #b91c1c 100%);
+      border: 5px solid #f87171;
+      box-shadow: 0 0 25px rgba(239, 68, 68, 0.5), inset 0 2px 4px rgba(255,255,255,0.4);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+    .btn-bell:active {
+      transform: scale(0.92);
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.7);
+    }
+    .btn-bell i {
+      font-size: 2.2rem;
+    }
+    .btn-bell span {
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+
+    /* สถานะแจ้งเตือนสด */
+    .alert-status {
+      background: #0f172a;
+      border: 1px dashed #475569;
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #38bdf8;
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-reset {
+      background: transparent;
+      border: 1px solid #475569;
+      color: #94a3b8;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      cursor: pointer;
+    }
+    .btn-reset:hover {
+      background: #334155;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="mobile-simulator">
+    <div class="sim-header">
+      <h1><i class="fa-solid fa-mobile-screen"></i> ผู้โดยสารแจ้งลงรถ</h1>
+      <p>จำลองการกดเลือกป้าย & สัญญาณกริ่งหยุดรถ</p>
+    </div>
+
+    <!-- เลือกรถที่จะส่งข้อมูลไปหา -->
+    <div class="bus-select-box">
+      <span>เลือกรถที่กำลังโดยสาร:</span>
+      <select id="bus-select" onchange="switchBus()">
+        <option value="99" selected>รถเบอร์ 99 (ESP32)</option>
+        <option value="1">รถเบอร์ 1</option>
+        <option value="2">รถเบอร์ 2</option>
+      </select>
+    </div>
+
+    <!-- ปุ่มเลือกป้าย -->
+    <div>
+      <div class="section-title">
+        <span><i class="fa-solid fa-map-pin"></i> กดเลือกป้ายที่จะลง:</span>
+        <button class="btn-reset" onclick="resetAllPassengers()" title="รีเซ็ตจำนวนคนเป็น 0 ทั้งหมด">
+          <i class="fa-solid fa-rotate-left"></i> รีเซ็ตตัวเลข
+        </button>
+      </div>
+      <div class="stop-btn-grid" id="stop-buttons-container">
+        <!-- สร้างปุ่มตามรายชื่อ 19 ป้ายอัตโนมัติ -->
+      </div>
+    </div>
+
+    <!-- ปุ่มกริ่งขนาดใหญ่ตามภาพสเก็ตช์ -->
+    <div class="bell-btn-container">
+      <div class="btn-bell" onclick="ringStopBell()">
+        <i class="fa-solid fa-bell"></i>
+        <span>กดหยุดรถ</span>
+      </div>
+    </div>
+
+    <!-- แถบสถานะข้อความเสียง -->
+    <div class="alert-status" id="status-toast">
+      แตะที่ป้ายเพื่อแจ้งคนขับ หรือกดกริ่งเพื่อหยุดรถ
+    </div>
+  </div>
+
+  <script>
+    // --- 1. Firebase Config ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyCWzHhoHD6F-WzM-CB_NZI40qcsaieo5Q0",
+      authDomain: "tabkaew-bus-tracker.firebaseapp.com",
+      projectId: "tabkaew-bus-tracker",
+      storageBucket: "tabkaew-bus-tracker.firebasestorage.app",
+      messagingSenderId: "837452814060",
+      appId: "1:837452814060:web:1b69e72f7cb263cebef7c9",
+      measurementId: "G-3WKFL7KSWD"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let selectedBus = "99";
+
+    // รายชื่อป้ายหยุดรถทั้ง 19 ป้าย จาก map.html
+    const busStops = [
+      "จุดจอดรถสายหลัก", "อาคาร 50 ปี คณะอักษรศาสตร์", "โรงอาหารสระแก้ว (Union)",
+      "หอสมุดพระราชวังสนามจันทร์", "โรงอาหารเพชรรัตน์", "ประตู ม. มุ่งหน้าจิตรกรรม",
+      "คณะจิตรกรรมฯ", "คณะวิศวกรรมศาสตร์ฯ", "แยกวิศวะฯ มุ่งหน้าเพชรรัตน์",
+      "ถนนสระบัว", "หอพักเพชรรัตน์", "คณะวิทยาศาสตร์",
+      "ตรงข้ามโรงอาหารสระแก้ว", "ตรงข้ามคณะอักษรฯ", "รอไปเส้นทางคณะศึกษาศาสตร์/โรงเรียนสาธิตฯ",
+      "แยกดนตรีสากล", "ทางโค้งคณะศึกษาฯ", "คณะศึกษาศาสตร์ (ตึกสีส้ม)", "โรงเรียนสาธิตฯ"
+    ];
+
+    // สร้างปุ่มป้ายหยุดรถลงใน Grid
+    const container = document.getElementById('stop-buttons-container');
+    busStops.forEach((name, index) => {
+      const stopNo = index + 1;
+      const btn = document.createElement('div');
+      btn.className = 'btn-stop';
+      btn.onclick = () => requestStop(stopNo, name);
+      btn.innerHTML = `
+        <span class="badge-num">ป้าย ${stopNo}</span>
+        <span class="name" title="${name}">${name}</span>
+      `;
+      container.appendChild(btn);
+    });
+
+    function switchBus() {
+      selectedBus = document.getElementById('bus-select').value;
+      updateToast(`สลับการเชื่อมต่อไปยัง: รถเบอร์ ${selectedBus}`);
+    }
+
+    function updateToast(msg) {
+      document.getElementById('status-toast').innerText = msg;
+    }
+
+    // --- 2. ระบบเสียง Google แปลภาษา (เมื่อกดเลือกป้าย) ---
+    let currentAudio = null;
+    function speakGoogleTTS(text) {
+      if (!text) return;
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+      }
+      const encodedText = encodeURIComponent(text);
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=th&client=tw-ob&q=${encodedText}`;
+      currentAudio = new Audio(url);
+      currentAudio.play().catch(e => console.warn(e));
+    }
+
+    // --- 3. ระบบเสียงกริ่งกระดิ่งรถเมล์ "กริ๊ง~" (Web Audio API Synthesizer) ---
+    function playDingBell() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        osc.type = "sine";
+        // เสียงกริ่งความถี่สูง 1200Hz ไต่ระดับลดลง
+        osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(700, audioCtx.currentTime + 0.6);
+
+        gainNode.gain.setValueAtTime(0.7, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.8);
+      } catch (err) {
+        console.warn("Audio Context Error:", err);
+      }
+    }
+
+    // ผู้โดยสารกดเลือกป้ายที่จะลง
+    function requestStop(stopNumber, stopName) {
+      updateToast(`ส่งคำขอลงที่: ป้าย ${stopNumber} (${stopName})`);
+      speakGoogleTTS(`ขอลง ป้ายที่ ${stopNumber}`);
+
+      // ส่งตัวเลขคนลงเข้า Firestore แบบ atomic increment (+1)
+      const busRef = db.collection("bus_passengers").doc(`bus_${selectedBus}`);
+      busRef.set({
+        [`stop_${stopNumber}`]: firebase.firestore.FieldValue.increment(1)
+      }, { merge: true }).catch(err => console.error("Firestore update error:", err));
+    }
+
+    // ผู้โดยสารกดกริ่งหยุดรถ
+    function ringStopBell() {
+      playDingBell();
+      updateToast("🔔 กดกริ่งหยุดรถแล้ว! (ส่งสัญญาณเตือนคนขับ)");
+    }
+
+    // ฟังก์ชันรีเซ็ตยอดคนลงทั้งหมดของรถคันนี้
+    function resetAllPassengers() {
+      if (confirm(`ต้องการรีเซ็ตจำนวนคนลงของ รถเบอร์ ${selectedBus} เป็น 0 ทั้งหมดใช่หรือไม่?`)) {
+        const resetObj = {};
+        for (let i = 1; i <= 19; i++) {
+          resetObj[`stop_${i}`] = 0;
+        }
+        db.collection("bus_passengers").doc(`bus_${selectedBus}`).set(resetObj)
+          .then(() => updateToast("รีเซ็ตตัวเลขคนลงทุกป้ายเรียบร้อยแล้ว"))
+          .catch(e => console.error(e));
+      }
+    }
+  </script>
+</body>
+</html>

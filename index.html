@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบติดตามรถรางไฟฟ้า ทับแก้ว - เมนูหลัก</title>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Prompt', sans-serif; }
+    body {
+      background: linear-gradient(135deg, #0b5345, #11998e);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    .app-card {
+      background: white;
+      width: 100%;
+      max-width: 480px;
+      border-radius: 24px;
+      padding: 30px 24px;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+      text-align: center;
+    }
+    .app-card h1 {
+      font-size: 1.4rem;
+      color: #0b5345;
+      margin-bottom: 6px;
+    }
+    .app-card p {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-bottom: 24px;
+    }
+    .menu-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .menu-btn {
+      background: #f8fafc;
+      border: 2px solid #e2e8f0;
+      border-radius: 18px;
+      padding: 20px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: #334155;
+      transition: all 0.25s ease;
+      cursor: pointer;
+    }
+    .menu-btn:hover {
+      border-color: #10b981;
+      transform: translateY(-3px);
+      box-shadow: 0 8px 16px rgba(16, 185, 129, 0.15);
+    }
+    .icon-wrapper {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+    }
+    .menu-btn span {
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+    .btn-test {
+      display: block;
+      background: #ecfdf5;
+      border: 1px dashed #10b981;
+      color: #047857;
+      padding: 12px;
+      border-radius: 14px;
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    .btn-test:hover { background: #d1fae5; }
+  </style>
+</head>
+<body>
+  <div class="app-card">
+    <h1>ทับแก้ว EV Shuttle</h1>
+    <p>ระบบติดตามรถรางไฟฟ้า มหาวิทยาลัยศิลปากร</p>
+
+    <div class="menu-grid">
+      <!-- 1. สำหรับคนทั่วไป: แผนที่เดิม -->
+      <a href="map.html" class="menu-btn">
+        <div class="icon-wrapper" style="background:#e0f2fe; color:#0284c7;">
+          <i class="fa-solid fa-map-location-dot"></i>
+        </div>
+        <span>สำหรับคนทั่วไป<br><small style="font-size:0.75rem; color:#64748b; font-weight:normal;">แผนที่สด</small></span>
+      </a>
+
+      <!-- 2. บุคลากร: แดชบอร์ดดาต้า -->
+      <a href="dashboard.html" class="menu-btn">
+        <div class="icon-wrapper" style="background:#fef3c7; color:#d97706;">
+          <i class="fa-solid fa-chart-pie"></i>
+        </div>
+        <span>บุคลากร<br><small style="font-size:0.75rem; color:#64748b; font-weight:normal;">ดาต้า & CO₂</small></span>
+      </a>
+
+      <!-- 3. สำหรับคนขับ -->
+      <a href="driver.html" class="menu-btn">
+        <div class="icon-wrapper" style="background:#fee2e2; color:#dc2626;">
+          <i class="fa-solid fa-id-card"></i>
+        </div>
+        <span>สำหรับคนขับ<br><small style="font-size:0.75rem; color:#64748b; font-weight:normal;">เช็กคนลง/ประกาศ</small></span>
+      </a>
+
+      <!-- 4. ป้ายรถ / หน้าจอบนรถ -->
+      <a href="passenger_display.html" class="menu-btn">
+        <div class="icon-wrapper" style="background:#f3e8ff; color:#7e22ce;">
+          <i class="fa-solid fa-tv"></i>
+        </div>
+        <span>ป้ายรถ / จอบนรถ<br><small style="font-size:0.75rem; color:#64748b; font-weight:normal;">กล้อง & แผนที่</small></span>
+      </a>
+    </div>
+
+    <!-- ปุ่มจำลองผู้โดยสารกดกริ่ง -->
+    <a href="passenger_test.html" class="btn-test">
+      <i class="fa-solid fa-bell"></i> เปิดหน้าจำลอง: ผู้โดยสารกดกริ่ง / เลือกป้ายที่จะลง
+    </a>
+  </div>
+</body>
+</html>

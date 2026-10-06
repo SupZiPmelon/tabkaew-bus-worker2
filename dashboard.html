@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบวิเคราะห์ข้อมูลและคาร์บอนฟุตพริ้นท์ - ทับแก้ว EV Shuttle</title>
+
+  <!-- Google Font & FontAwesome -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Firebase Compat SDKs (v10.9.0) -->
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Prompt', sans-serif; }
+    body {
+      background-color: #f1f5f9;
+      color: #1e293b;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1240px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* แถบ Header หลัก */
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(135deg, #064e3b, #047857);
+      color: white;
+      padding: 20px 28px;
+      border-radius: 20px;
+      box-shadow: 0 10px 25px rgba(6, 78, 59, 0.2);
+    }
+    .header-title h1 {
+      font-size: 1.45rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-title p {
+      font-size: 0.85rem;
+      color: #a7f3d0;
+      margin-top: 4px;
+    }
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .date-filter {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: white;
+      padding: 8px 14px;
+      border-radius: 12px;
+      color: #334155;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+    .date-filter input {
+      border: 1px solid #cbd5e1;
+      padding: 6px 10px;
+      border-radius: 8px;
+      outline: none;
+      font-family: 'Prompt', sans-serif;
+      font-size: 0.85rem;
+    }
+    .btn-home {
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 10px 14px;
+      border-radius: 12px;
+      text-decoration: none;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+    .btn-home:hover { background: rgba(255, 255, 255, 0.25); }
+
+    /* การ์ดสถิติรวม (KPI Cards) */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .kpi-card {
+      background: white;
+      padding: 20px;
+      border-radius: 18px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-left: 6px solid #10b981;
+      transition: transform 0.2s;
+    }
+    .kpi-card:hover { transform: translateY(-2px); }
+    .kpi-icon {
+      width: 54px;
+      height: 54px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      flex-shrink: 0;
+    }
+    .kpi-info h3 {
+      font-size: 0.82rem;
+      color: #64748b;
+      font-weight: 500;
+    }
+    .kpi-info .value {
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin-top: 2px;
+    }
+
+    /* โครงสร้าง Dashboard: กราฟ + ตาราง */
+    .dashboard-layout {
+      display: grid;
+      grid-template-columns: 1.8fr 1.2fr;
+      gap: 20px;
+    }
+    .panel {
+      background: white;
+      padding: 22px;
+      border-radius: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+      display: flex;
+      flex-direction: column;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .panel-header h2 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ตาราง */
+    .table-container {
+      overflow-x: auto;
+      max-height: 340px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      font-size: 0.88rem;
+    }
+    th {
+      background-color: #f8fafc;
+      color: #64748b;
+      font-weight: 600;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    td {
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .badge-bus {
+      background: #e0f2fe;
+      color: #0369a1;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 0.78rem;
+    }
+
+    @media (max-width: 900px) {
+      .dashboard-layout { grid-template-columns: 1fr; }
+      .header-bar { flex-direction: column; gap: 16px; align-items: flex-start; }
+      .header-controls { width: 100%; justify-content: space-between; flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- แถบ Header ด้านบน -->
+    <header class="header-bar">
+      <div class="header-title">
+        <h1><i class="fa-solid fa-chart-line"></i> ศูนย์ข้อมูลและวิเคราะห์พลังงานสะอาด (Data Analytics)</h1>
+        <p>ระบบติดตามรถรางไฟฟ้า มหาวิทยาลัยศิลปากร วิทยาเขตพระราชวังสนามจันทร์</p>
+      </div>
+
+      <div class="header-controls">
+        <div class="date-filter">
+          <label for="date-select"><i class="fa-regular fa-calendar"></i> วันที่:</label>
+          <input type="date" id="date-select">
+        </div>
+        <a href="index.html" class="btn-home">
+          <i class="fa-solid fa-house"></i> เมนูหลัก
+        </a>
+      </div>
+    </header>
+
+    <!-- สถิติภาพรวม 4 กล่อง (KPI) -->
+    <div class="kpi-grid">
+      <div class="kpi-card" style="border-left-color: #3b82f6;">
+        <div class="kpi-icon" style="background:#eff6ff; color:#2563eb;"><i class="fa-solid fa-road"></i></div>
+        <div class="kpi-info">
+          <h3>ระยะทางสะสมรวม</h3>
+          <div class="value" id="total-km">0.00 <span style="font-size:0.95rem; font-weight: normal; color:#64748b;">km</span></div>
+        </div>
+      </div>
+
+      <div class="kpi-card" style="border-left-color: #10b981;">
+        <div class="kpi-icon" style="background:#ecfdf5; color:#059669;"><i class="fa-solid fa-leaf"></i></div>
+        <div class="kpi-info">
+          <h3>ลดการปล่อยคาร์บอน (CO₂e)</h3>
+          <div class="value" id="total-co2">0.00 <span style="font-size:0.95rem; font-weight: normal; color:#64748b;">kg</span></div>
+        </div>
+      </div>
+
+      <div class="kpi-card" style="border-left-color: #f59e0b;">
+        <div class="kpi-icon" style="background:#fffbeb; color:#d97706;"><i class="fa-solid fa-gas-pump"></i></div>
+        <div class="kpi-info">
+          <h3>ประหยัดน้ำมันเชื้อเพลิง</h3>
+          <div class="value" id="total-fuel">0.00 <span style="font-size:0.95rem; font-weight: normal; color:#64748b;">L</span></div>
+        </div>
+      </div>
+
+      <div class="kpi-card" style="border-left-color: #8b5cf6;">
+        <div class="kpi-icon" style="background:#f5f3ff; color:#7c3aed;"><i class="fa-solid fa-baht-sign"></i></div>
+        <div class="kpi-info">
+          <h3>ประหยัดงบค่าเชื้อเพลิง</h3>
+          <div class="value" id="total-money">0.00 <span style="font-size:0.95rem; font-weight: normal; color:#64748b;">บาท</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ส่วนเนื้อหา: กราฟแท่ง + ตารางสรุปรายคัน -->
+    <div class="dashboard-layout">
+      <!-- 1. กราฟเปรียบเทียบระยะทางแต่ละคัน -->
+      <div class="panel">
+        <div class="panel-header">
+          <h2><i class="fa-solid fa-chart-column"></i> สถิติระยะทางวิ่งรายคัน (กิโลเมตร)</h2>
+        </div>
+        <div style="height: 320px; position: relative;">
+          <canvas id="busChart"></canvas>
+        </div>
+      </div>
+
+      <!-- 2. ตารางรายละเอียดรายคัน -->
+      <div class="panel">
+        <div class="panel-header">
+          <h2><i class="fa-solid fa-table-list"></i> ข้อมูลบันทึกรายคัน</h2>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>เบอร์รถ</th>
+                <th>ระยะทาง (km)</th>
+                <th>ลด CO₂ (kg)</th>
+              </tr>
+            </thead>
+            <tbody id="bus-table-body">
+              <tr>
+                <td colspan="3" style="text-align:center; color:#94a3b8; padding:20px;">กำลังโหลดข้อมูล...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- 1. Firebase Configuration จากโปรเจกต์ของคุณ ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyCWzHhoHD6F-WzM-CB_NZI40qcsaieo5Q0",
+      authDomain: "tabkaew-bus-tracker.firebaseapp.com",
+      projectId: "tabkaew-bus-tracker",
+      storageBucket: "tabkaew-bus-tracker.firebasestorage.app",
+      messagingSenderId: "837452814060",
+      appId: "1:837452814060:web:1b69e72f7cb263cebef7c9",
+      measurementId: "G-3WKFL7KSWD"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let chartInstance = null;
+    const dateInput = document.getElementById('date-select');
+
+    // วันที่เริ่มต้นเป็นวันปัจจุบัน
+    const today = new Date();
+    dateInput.value = today.toISOString().split('T')[0];
+
+    // แปลง YYYY-MM-DD -> DD-MM-YYYY ให้ตรงกับ Document ID ของ Firestore
+    function formatDateToFirestore(dateStr) {
+      const [year, month, day] = dateStr.split('-');
+      return `${day}-${month}-${year}`;
+    }
+
+    // ฟังก์ชันดึงข้อมูลจาก Cloud Firestore
+    function loadData(dateStr) {
+      const docId = formatDateToFirestore(dateStr);
+      
+      db.collection("daily_distance").doc(docId).onSnapshot((doc) => {
+        if (doc.exists) {
+          const data = doc.data();
+          renderDashboard(data);
+        } else {
+          renderDashboard({});
+        }
+      }, (error) => {
+        console.error("Firestore Read Error:", error);
+      });
+    }
+
+    // ฟังก์ชันคำนวณสถิติและวาด Dashboard
+    function renderDashboard(data) {
+      const busKeys = Object.keys(data).sort((a, b) => Number(a) - Number(b));
+      let totalDistance = 0;
+      const chartLabels = [];
+      const chartDistances = [];
+      const tableBody = document.getElementById('bus-table-body');
+      tableBody.innerHTML = '';
+
+      if (busKeys.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:24px;">ไม่มีข้อมูลการวิ่งในวันที่เลือก</td></tr>';
+      }
+
+      busKeys.forEach(busNo => {
+        const dist = parseFloat(data[busNo]) || 0;
+        totalDistance += dist;
+        // มาตรฐานเฉลี่ย: 1 km ลด CO2 ประมาณ 0.18 kg (เทียบรถบัสดีเซล)
+        const co2Saved = (dist * 0.18).toFixed(2);
+
+        chartLabels.push(`รถเบอร์ ${busNo}`);
+        chartDistances.push(dist.toFixed(2));
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td><span class="badge-bus">${busNo === '99' ? 'เบอร์ 99 (ESP32)' : 'เบอร์ ' + busNo}</span></td>
+          <td><strong>${dist.toFixed(2)}</strong> km</td>
+          <td style="color:#059669; font-weight:600;">${co2Saved} kg</td>
+        `;
+        tableBody.appendChild(row);
+      });
+
+      // สรุปการคำนวณด้านพลังงานและสิ่งแวดล้อม
+      const totalCO2 = (totalDistance * 0.18).toFixed(2);
+      const totalFuelLiters = (totalDistance / 4.5).toFixed(2); // เทียบอัตรากินน้ำมันรถบัสขนาดเล็ก ~4.5 km/L
+      const totalSavingsBaht = (totalFuelLiters * 33.0).toFixed(2); // สมมติน้ำมันดีเซล ~33 บาท/ลิตร
+
+      document.getElementById('total-km').innerHTML = `${totalDistance.toFixed(2)} <span style="font-size:0.95rem; font-weight: normal; color:#64748b;">km</span>`;
+      document.getElementById('total-co2').innerHTML = `${totalCO2} <span style="font-size:0.95rem; font-weight: normal; color:#64748b;">kg</span>`;
+      document.getElementById('total-fuel').innerHTML = `${totalFuelLiters} <span style="font-size:0.95rem; font-weight: normal; color:#64748b;">L</span>`;
+      document.getElementById('total-money').innerHTML = `${Number(totalSavingsBaht).toLocaleString()} <span style="font-size:0.95rem; font-weight: normal; color:#64748b;">บาท</span>`;
+
+      updateChart(chartLabels, chartDistances);
+    }
+
+    // ฟังก์ชันวาดกราฟ Chart.js
+    function updateChart(labels, data) {
+      const ctx = document.getElementById('busChart').getContext('2d');
+      if (chartInstance) {
+        chartInstance.destroy();
+      }
+
+      chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'ระยะทางสะสม (km)',
+            data: data,
+            backgroundColor: '#059669',
+            hoverBackgroundColor: '#10b981',
+            borderRadius: 8,
+            barThickness: 32
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context) => ` ระยะทาง: ${context.parsed.y} กิโลเมตร`
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { callback: (val) => `${val} km` },
+              grid: { color: '#f1f5f9' }
+            },
+            x: {
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    // ฟัง Event เมื่อเปลี่ยนวันที่
+    dateInput.addEventListener('change', (e) => {
+      loadData(e.target.value);
+    });
+
+    // เริ่มโหลดข้อมูล
+    loadData(dateInput.value);
+  </script>
+</body>
+</html>
